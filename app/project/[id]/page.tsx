@@ -52,6 +52,18 @@ export default function ProjectPage({
 
   const isFirstMessage = messages?.length === 0
 
+  // Cleanup: Stop dev server when leaving the page
+  useEffect(() => {
+    return () => {
+      // Cleanup function runs when component unmounts
+      if (project?.sandboxId && project?.devServerUrl) {
+        stopDevServer({ projectId, sandboxId: project.sandboxId }).catch(
+          (err) => console.error("Failed to stop dev server on unmount:", err),
+        )
+      }
+    }
+  }, [project?.sandboxId, project?.devServerUrl, projectId, stopDevServer])
+
   // Sync preview URL from project
   useEffect(() => {
     if (project?.devServerUrl) {
@@ -76,9 +88,7 @@ export default function ProjectPage({
       ) {
         isCreatingSandboxRef.current = true
         try {
-          console.log("Creating sandbox with", files.length, "files...")
-          const sandboxId = await createSandbox({ projectId })
-          console.log("Sandbox created:", sandboxId)
+          await createSandbox({ projectId })
         } catch (error) {
           console.error("Failed to create sandbox:", error)
           isCreatingSandboxRef.current = false
@@ -130,11 +140,10 @@ export default function ProjectPage({
         await stopDevServer({ projectId, sandboxId: project.sandboxId })
       } else {
         // Start the server
-        const url = await startDevServer({
+        await startDevServer({
           projectId,
           sandboxId: project.sandboxId,
         })
-        console.log("Dev server started:", url)
       }
     } catch (error) {
       console.error("Failed to toggle server:", error)

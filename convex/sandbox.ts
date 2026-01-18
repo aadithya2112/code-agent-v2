@@ -33,33 +33,18 @@ export const createSandbox = action({
     // Write all files to sandbox
     for (const file of files) {
       try {
-        console.log(`Writing file: ${file.path} (${file.content.length} bytes)`)
         await sandbox.files.write(file.path, file.content)
-
-        // Debug: Show vite.config.ts content
-        if (file.path === "vite.config.ts") {
-          console.log("vite.config.ts content:", file.content)
-        }
       } catch (error) {
         console.warn(`Failed to write ${file.path}:`, error)
       }
-    }
-
-    // Verify vite.config.ts was written correctly
-    try {
-      const viteConfig = await sandbox.files.read("vite.config.ts")
-      console.log("Verified vite.config.ts in sandbox:", viteConfig)
-    } catch (error) {
-      console.error("Failed to verify vite.config.ts:", error)
     }
 
     // Run npm install
     console.log("Running npm install...")
     const installResult = await sandbox.commands.run("npm install")
 
-    console.log("npm install output:", installResult.stdout)
-    if (installResult.stderr) {
-      console.warn("npm install errors:", installResult.stderr)
+    if (installResult.exitCode !== 0) {
+      console.warn("npm install had warnings:", installResult.stderr)
     }
 
     // Store sandbox ID in project
@@ -93,9 +78,29 @@ export const startDevServer = action({
   handler: async (ctx, { projectId, sandboxId }): Promise<string> => {
     console.log(`Starting dev server in sandbox: ${sandboxId}`)
 
-    const sandbox = await Sandbox.connect(sandboxId, {
-      apiKey: process.env.E2B_API_KEY,
-    })
+    let sandbox: Sandbox
+    
+    try {
+      // Try to connect to existing sandbox
+      sandbox = await Sandbox.connect(sandboxId, {
+        apiKey: process.env.E2B_API_KEY,
+      })
+    } catch (error) {
+      // Sandbox doesn't exist anymore - create a new one
+      console.log(`Sandbox ${sandboxId} not found, creating new sandbox...`)
+      
+      const newSandboxId = await ctx.runAction(api.sandbox.createSandbox, {
+        projectId,
+      })
+      
+      // Connect to the newly created sandbox
+      sandbox = await Sandbox.connect(newSandboxId, {
+        apiKey: process.env.E2B_API_KEY,
+      })
+      
+      sandboxId = newSandboxId
+      console.log(`New sandbox created: ${sandboxId}`)
+    }
 
     // Start the dev server in the background with DANGEROUSLY_DISABLE_HOST_CHECK
     const devProcess = await sandbox.commands.run(
@@ -135,22 +140,37 @@ export const stopDevServer = action({
   handler: async (ctx, { projectId, sandboxId }): Promise<void> => {
     console.log(`Stopping dev server in sandbox: ${sandboxId}`)
 
-    const sandbox = await Sandbox.connect(sandboxId, {
-      apiKey: process.env.E2B_API_KEY,
-    })
+    try {
+      const sandbox = await Sandbox.connect(sandboxId, {
+        apiKey: process.env.E2B_API_KEY,
+      })
 
-    // Kill all node processes (which includes the dev server)
-    // Use || true to prevent error if no processes are found
-    await sandbox.commands.run(
-      "pkill -f 'npm run dev' || pkill -f 'node' || true",
-    )
+      // Kill all node processes (which includes the dev server)
+      // Run in background to avoid waiting for process termination
+      try {
+        await sandbox.commands.run(
+          "pkill -f 'vite' || pkill -f 'node' || true",
+          { background: false },
+        )
+      } catch (error) {
+        // Ignore errors from pkill - process might already be dead
+        console.log("Process kill completed (errors ignored)")
+      }
 
-    // Clear the preview URL
-    await ctx.runMutation(api.projects.updateDevServerUrl, {
-      projectId,
-      devServerUrl: undefined,
-    })
+      // Clear the preview URL
+      await ctx.runMutation(api.projects.updateDevServerUrl, {
+        projectId,
+        devServerUrl: undefined,
+      })
 
-    console.log("Dev server stopped")
+      console.log("Dev server stopped")
+    } catch (error) {
+      console.error("Error stopping dev server:", error)
+      // Still try to clear the URL even if we couldn't connect
+      await ctx.runMutation(api.projects.updateDevServerUrl, {
+        projectId,
+        devServerUrl: undefined,
+      })
+    }
   },
 })

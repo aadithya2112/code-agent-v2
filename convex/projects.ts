@@ -256,6 +256,13 @@ export const updateSandboxId = mutation({
     sandboxId: v.string(),
   },
   handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId)
+    if (!project) {
+      console.warn(
+        `Project ${args.projectId} not found, skipping sandbox ID update`,
+      )
+      return
+    }
     await ctx.db.patch(args.projectId, {
       sandboxId: args.sandboxId,
       lastModified: Date.now(),
@@ -269,6 +276,13 @@ export const updateDevServerUrl = mutation({
     devServerUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId)
+    if (!project) {
+      console.warn(
+        `Project ${args.projectId} not found, skipping dev server URL update`,
+      )
+      return
+    }
     await ctx.db.patch(args.projectId, {
       devServerUrl: args.devServerUrl,
       lastModified: Date.now(),
