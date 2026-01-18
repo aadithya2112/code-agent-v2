@@ -49,20 +49,21 @@ export default function ProjectPage({
   const createSandbox = useAction(api.sandbox.createSandbox)
   const startDevServer = useAction(api.sandbox.startDevServer)
   const stopDevServer = useAction(api.sandbox.stopDevServer)
+  const destroySandbox = useAction(api.sandbox.destroySandbox)
 
   const isFirstMessage = messages?.length === 0
 
-  // Cleanup: Stop dev server when leaving the page
+  // Cleanup: Destroy sandbox when leaving the page
   useEffect(() => {
     return () => {
       // Cleanup function runs when component unmounts
-      if (project?.sandboxId && project?.devServerUrl) {
-        stopDevServer({ projectId, sandboxId: project.sandboxId }).catch(
-          (err) => console.error("Failed to stop dev server on unmount:", err),
+      if (project?.sandboxId) {
+        destroySandbox({ sandboxId: project.sandboxId }).catch((err) =>
+          console.error("Failed to destroy sandbox on unmount:", err),
         )
       }
     }
-  }, [project?.sandboxId, project?.devServerUrl, projectId, stopDevServer])
+  }, [project?.sandboxId, destroySandbox])
 
   // Sync preview URL from project
   useEffect(() => {

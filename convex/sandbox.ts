@@ -79,7 +79,7 @@ export const startDevServer = action({
     console.log(`Starting dev server in sandbox: ${sandboxId}`)
 
     let sandbox: Sandbox
-    
+
     try {
       // Try to connect to existing sandbox
       sandbox = await Sandbox.connect(sandboxId, {
@@ -88,16 +88,16 @@ export const startDevServer = action({
     } catch (error) {
       // Sandbox doesn't exist anymore - create a new one
       console.log(`Sandbox ${sandboxId} not found, creating new sandbox...`)
-      
+
       const newSandboxId = await ctx.runAction(api.sandbox.createSandbox, {
         projectId,
       })
-      
+
       // Connect to the newly created sandbox
       sandbox = await Sandbox.connect(newSandboxId, {
         apiKey: process.env.E2B_API_KEY,
       })
-      
+
       sandboxId = newSandboxId
       console.log(`New sandbox created: ${sandboxId}`)
     }
