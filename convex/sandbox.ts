@@ -174,3 +174,44 @@ export const stopDevServer = action({
     }
   },
 })
+
+export const syncFileToSandbox = action({
+  args: {
+    sandboxId: v.string(),
+    path: v.string(),
+    content: v.string(),
+    version: v.number(),
+  },
+  handler: async (
+    ctx,
+    { sandboxId, path, content, version },
+  ): Promise<void> => {
+    console.log(`Syncing file ${path} (v${version}) to sandbox ${sandboxId}`)
+
+    try {
+      // Try to connect to the sandbox
+      const sandbox = await Sandbox.connect(sandboxId, {
+        apiKey: process.env.E2B_API_KEY,
+      })
+
+      // Write the file to the sandbox
+      await sandbox.files.write(path, content)
+
+      console.log(`Successfully synced ${path} to sandbox`)
+    } catch (error) {
+      console.error(`Failed to sync ${path} to sandbox:`, error)
+
+      // Provide more specific error messages
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error"
+
+      if (errorMessage.includes("not found") || errorMessage.includes("404")) {
+        throw new Error(
+          `Sandbox ${sandboxId} does not exist or has been terminated. Please restart the dev server to create a new sandbox.`,
+        )
+      }
+
+      throw new Error(`Failed to sync file to sandbox: ${errorMessage}`)
+    }
+  },
+})

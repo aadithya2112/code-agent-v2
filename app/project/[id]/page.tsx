@@ -17,6 +17,7 @@ import {
 } from "@/components/ai-elements/message"
 import { PreviewPanel } from "@/components/PreviewPanel"
 import { CodePanel } from "@/components/CodePanel"
+import { FileSyncTest } from "@/components/FileSyncTest"
 import Link from "next/link"
 import { CornerDownLeftIcon } from "lucide-react"
 
@@ -29,7 +30,9 @@ export default function ProjectPage({
   const projectId = id as Id<"projects">
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(undefined)
   const [isServerRunning, setIsServerRunning] = useState(false)
-  const [activeTab, setActiveTab] = useState<"preview" | "code">("preview")
+  const [activeTab, setActiveTab] = useState<"preview" | "code" | "test">(
+    "preview",
+  )
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [editedTitle, setEditedTitle] = useState("")
@@ -338,6 +341,13 @@ export default function ProjectPage({
               >
                 Code
               </Button>
+              <Button
+                variant={activeTab === "test" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setActiveTab("test")}
+              >
+                Test Sync
+              </Button>
             </div>
 
             {/* Stop/Start Button */}
@@ -363,8 +373,15 @@ export default function ProjectPage({
           <div className="flex-1 overflow-hidden">
             {activeTab === "preview" ? (
               <PreviewPanel previewUrl={previewUrl} />
-            ) : (
+            ) : activeTab === "code" ? (
               <CodePanel projectId={projectId} />
+            ) : (
+              <div className="h-full overflow-auto p-4">
+                <FileSyncTest
+                  projectId={projectId}
+                  sandboxId={project?.sandboxId}
+                />
+              </div>
             )}
           </div>
         </div>

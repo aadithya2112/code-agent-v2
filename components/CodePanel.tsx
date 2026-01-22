@@ -3,11 +3,13 @@
 import { useQuery } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { Id } from "@/convex/_generated/dataModel"
-import { CodeBlock } from "@/components/ai-elements/code-block"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { FileIcon, FolderIcon, ChevronRightIcon } from "lucide-react"
+import { FileIcon, FolderIcon, ChevronRightIcon, SaveIcon } from "lucide-react"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
+import { MonacoEditor } from "@/components/MonacoEditor"
+import { useFileEdit } from "@/hooks/useFileEdit"
+import { Badge } from "@/components/ui/badge"
 
 interface CodePanelProps {
   projectId: Id<"projects">
@@ -15,7 +17,10 @@ interface CodePanelProps {
 
 export function CodePanel({ projectId }: CodePanelProps) {
   const files = useQuery(api.files.getProjectFiles, { projectId })
+  const project = useQuery(api.projects.getProject, { projectId })
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
+
+  const { editFile, status } = useFileEdit(projectId, project?.sandboxId)
 
   if (files === undefined) {
     return (
@@ -54,6 +59,11 @@ export function CodePanel({ projectId }: CodePanelProps) {
       }
     })
   })
+
+  const handleFileChange = async (content: string) => {
+    if (!selectedFile) return
+    await editFile(selectedFile, content)
+  }
 
   const renderTree = (
     tree: Record<string, any>,
@@ -97,61 +107,65 @@ export function CodePanel({ projectId }: CodePanelProps) {
   }
 
   return (
-    <div className="h-full flex">
-      {/* File Tree */}
-      <div className="w-64 border-r border-border overflow-auto">
-        <div className="p-3 border-b border-border">
-          <h3 className="text-sm font-semibold">Files</h3>
+    <div className="h-full flex flex-col">
+      {/* Status Bar */}
+      {selectedFileData && (
+        <div className="border-b border-border px-4 py-2 flex items-center justify-between bg-muted/20">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-mono text-muted-foreground">
+              {selectedFileData.path}
+            </span>
+            {status.isEditing && (
+              <Badge variant="outline" className="text-xs">
+                <SaveIcon className="h-3 w-3 mr-1" />
+                Saving...
+              </Badge>
+            )}
+          </div>
+          {status.pendingEdits > 0 && (
+            <Badge variant="secondary" className="text-xs">
+              {status.pendingEdits} pending
+            </Badge>
+          )}
         </div>
-        <div className="py-2">{renderTree(fileTree)}</div>
+      )}
+
+      <div className="flex-1 flex overflow-hidden">
+        {/* File Tree */}
+        <div className="w-64 border-r border-border overflow-auto">
+          <div className="p-3 border-b border-border">
+            <h3 className="text-sm font-semibold">Files</h3>
+          </div>
+          <div className="py-2">{renderTree(fileTree)}</div>
+        </div>
+
+        {/* Monaco Editor */}
+        <div className="flex-1 overflow-hidden">
+          {selectedFileData ? (
+            <MonacoEditor
+              path={selectedFileData.path}
+              content={selectedFileData.content}
+              onChangeAction={handleFileChange}
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center text-muted-foreground">
+              <div className="text-center space-y-2">
+                <p className="text-sm">Select a file to edit</p>
+                <p className="text-xs text-muted-foreground">
+                  Click on a file in the tree
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Code Viewer */}
-      <div className="flex-1 overflow-auto">
-        {selectedFileData ? (
-          <div className="p-4">
-            <div className="mb-4">
-              <h3 className="text-sm font-mono text-muted-foreground">
-                {selectedFileData.path}
-              </h3>
-            </div>
-            <CodeBlock
-              language={getLanguageFromPath(selectedFileData.path) as any}
-              code={selectedFileData.content}
-            />
-          </div>
-        ) : (
-          <div className="h-full flex items-center justify-center text-muted-foreground">
-            <div className="text-center space-y-2">
-              <p className="text-sm">Select a file to view</p>
-              <p className="text-xs text-muted-foreground">
-                Click on a file in the tree
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
+      {/* Error Display */}
+      {status.lastError && (
+        <div className="border-t border-border px-4 py-2 bg-destructive/10">
+          <p className="text-sm text-destructive">{status.lastError}</p>
+        </div>
+      )}
     </div>
   )
-}
-
-function getLanguageFromPath(path: string): string {
-  const ext = path.split(".").pop()?.toLowerCase()
-  const languageMap: Record<string, string> = {
-    ts: "typescript",
-    tsx: "typescript",
-    js: "javascript",
-    jsx: "javascript",
-    json: "json",
-    css: "css",
-    scss: "scss",
-    html: "html",
-    md: "markdown",
-    py: "python",
-    go: "go",
-    rs: "rust",
-    yml: "yaml",
-    yaml: "yaml",
-  }
-  return languageMap[ext || ""] || "plaintext"
 }
